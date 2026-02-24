@@ -1,6 +1,6 @@
 import { type PageProps } from "gatsby"
 import React, { useState, useEffect, useMemo } from "react"
-import { Container, Card, Form, Button, Alert, Spinner, Tabs, Tab, Row, Col, Badge, Stack, InputGroup } from "react-bootstrap"
+import { Container, Card, Form, Button, Alert, Spinner, Tabs, Tab, Row, Col, Badge, Stack, InputGroup, Modal } from "react-bootstrap"
 import SiteNavbar from "../components/SiteNavbar"
 import SiteFooter from "../components/SiteFooter"
 import { getSupabaseClient, Part } from "../lib/supabase"
@@ -15,48 +15,92 @@ interface Taxonomy {
     name: string;
 }
 
-const AdminPartCard = ({ part, actions }: { part: Part, actions: React.ReactNode }) => {
+const AdminPartCard = ({ part, actions, onEdit }: { part: Part, actions: React.ReactNode, onEdit: () => void }) => {
     // secure imgSrc
     const imgSrc = Array.isArray(part.image_src) ? part.image_src[0] : part.image_src;
+    const author = part.author || part.submitted_by || "Unknown";
+    const [imgError, setImgError] = useState(false);
+    const [copied, setCopied] = useState(false);
 
     return (
         <Col xs={12} sm={6} md={6} lg={4} xl={3} className="mb-4 d-flex align-items-stretch" style={{ minWidth: '280px', flexShrink: 0 }}>
-            <Card className="h-100 shadow-sm border-secondary w-100 bg-dark text-light overflow-hidden">
-                <div className="position-relative" style={{ aspectRatio: "16 / 9", backgroundColor: "#1a1d20" }}>
-                    {imgSrc ? (
-                        <img src={imgSrc} alt={part.title} loading="lazy" style={{ objectFit: 'cover', width: '100%', height: '100%' }} />
-                    ) : (
-                        <div className="w-100 h-100 d-flex align-items-center justify-content-center text-muted small">No Image</div>
-                    )}
-                    <Stack className="position-absolute" style={{ top: '10px', right: '10px' }} direction="vertical" gap={1}>
-                        {part.type_of_part && part.type_of_part.length > 0 && (
-                            <Badge pill bg="dark" className="border border-secondary py-1 px-3 shadow-sm text-truncate" style={{ maxWidth: '150px' }}>
-                                {part.type_of_part.join(', ')}
-                            </Badge>
+            <div className="w-100 h-100 position-relative z-index-0">
+                <Card className="h-100 shadow-sm border-secondary db-card bg-dark text-light overflow-hidden">
+                    <div className="card-img-holder position-relative overflow-hidden" style={{ aspectRatio: "16 / 9", height: "auto", width: "100%", backgroundColor: "#1a1d20" }}>
+                        {!imgError && imgSrc ? (
+                            <img src={imgSrc} alt={part.title} loading="lazy" style={{ objectFit: 'cover', width: '100%', height: '100%', borderTopLeftRadius: 'var(--bs-card-inner-border-radius)', borderTopRightRadius: 'var(--bs-card-inner-border-radius)' }} onError={() => setImgError(true)} />
+                        ) : (
+                            <div className="w-100 h-100 d-flex align-items-center justify-content-center text-muted placeholder-glow text-center p-3" style={{ borderTopLeftRadius: 'var(--bs-card-inner-border-radius)', borderTopRightRadius: 'var(--bs-card-inner-border-radius)' }}>
+                                <div className="placeholder w-100 h-100 bg-secondary" style={{ opacity: 0.2 }}></div>
+                                <span className="position-absolute z-index-1">No Image Available</span>
+                            </div>
                         )}
-                        {part.fabrication_method && part.fabrication_method.length > 0 && (
-                            <Badge pill bg="secondary" className="border border-secondary py-1 px-3 shadow-sm text-truncate" style={{ maxWidth: '150px' }}>
-                                {part.fabrication_method.join(', ')}
+                        <div className="position-absolute" style={{ top: '10px', right: '10px' }}>
+                            <Badge bg="primary" className="shadow-sm py-2 px-3 border border-dark">
+                                #{part.id?.toString().substring(0, 5)}
                             </Badge>
-                        )}
-                    </Stack>
-                </div>
-                <Card.Body className="d-flex flex-column p-4">
-                    <div className="d-flex justify-content-between align-items-start mb-3">
-                        <Card.Title as="h5" className="mb-0 fw-bold">{part.title}</Card.Title>
-                        {part.id && <Badge bg="primary" style={{ fontSize: '0.7rem' }}>#{part.id.toString().substring(0, 5)}</Badge>}
+                        </div>
                     </div>
+                    <Card.Body className="d-flex flex-column pt-3 px-3 pb-3">
+                        <div className="d-flex justify-content-between align-items-start mb-1 gap-2">
+                            <Card.Title as="h5" className="mb-1 fw-bold text-white text-truncate" title={part.title}>{part.title}</Card.Title>
+                            <Button variant="outline-light" size="sm" className="px-2 py-0" onClick={onEdit} style={{ fontSize: '0.8rem' }}>Edit</Button>
+                        </div>
+                        <Card.Subtitle className="mb-3 text-muted small">
+                            By: <span className="text-light">{author}</span>
+                        </Card.Subtitle>
 
-                    <div className="mt-auto pt-3 border-top border-secondary">
-                        {part.external_url && (
-                            <a href={part.external_url} target="_blank" rel="noreferrer" className="text-info text-decoration-underline small mb-3 d-block fw-bold display-6" style={{ fontSize: '0.9rem' }}>External Listing</a>
-                        )}
-                        <Stack direction="vertical" gap={2}>
-                            {actions}
-                        </Stack>
-                    </div>
-                </Card.Body>
-            </Card>
+                        <div className="mb-3">
+                            <span className="text-info fw-bold small me-2 d-block mb-2 text-uppercase letter-spacing-1">{part.platform?.join(', ') || "No Platform"}</span>
+                            <div className="d-flex flex-wrap gap-1">
+                                {part.type_of_part?.map((tag, i) => (
+                                    <Badge key={`cat-${i}`} pill bg="secondary" className="border border-secondary py-1 px-2 text-truncate" style={{ maxWidth: '150px' }}>{tag}</Badge>
+                                ))}
+                                {part.fabrication_method?.map((tag, i) => (
+                                    <Badge key={`fab-${i}`} pill bg="dark" className="border border-secondary py-1 px-2 text-truncate" style={{ maxWidth: '150px' }}>{tag}</Badge>
+                                ))}
+                                {part.is_oem && <Badge pill bg="none" style={{ color: '#a855f7', borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.1)' }} className="border py-1 px-2">OEM</Badge>}
+                            </div>
+                        </div>
+
+                        <div className="mt-auto pt-3 border-top border-secondary">
+                            {part.external_url ? (
+                                <a href={part.external_url} target="_blank" rel="noreferrer" className="btn btn-outline-info btn-sm w-100 fw-bold m-0 position-relative z-index-1 mb-2">
+                                    External Listing
+                                </a>
+                            ) : (
+                                <button className="btn btn-outline-secondary btn-sm w-100 fw-bold m-0 disabled border-0 mb-2" aria-disabled="true">
+                                    No External Link
+                                </button>
+                            )}
+                            {part.dropbox_url && (
+                                <div className="d-flex gap-2 w-100 mb-2">
+                                    <a href={part.dropbox_url} target="_blank" rel="noreferrer" className="btn btn-outline-success btn-sm flex-grow-1 fw-bold m-0 position-relative z-index-1">
+                                        Mirror Link
+                                    </a>
+                                    <button
+                                        className="btn btn-outline-secondary btn-sm fw-bold px-3 position-relative z-index-1"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            navigator.clipboard.writeText(part.dropbox_url!);
+                                            setCopied(true);
+                                            setTimeout(() => setCopied(false), 2000);
+                                        }}
+                                        title="Copy Mirror Link"
+                                        style={{ whiteSpace: 'nowrap', transition: 'all 0.2s', ...(copied ? { backgroundColor: '#198754', color: 'white', borderColor: '#198754' } : {}) }}
+                                    >
+                                        {copied ? "Copied!" : "Copy"}
+                                    </button>
+                                </div>
+                            )}
+                            <Stack direction="horizontal" gap={2} className="w-100 justify-content-between">
+                                {actions}
+                            </Stack>
+                        </div>
+                    </Card.Body>
+                </Card>
+            </div>
         </Col>
     );
 };
@@ -87,6 +131,44 @@ export default function AdminPage(props: PageProps) {
 
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const [editingPart, setEditingPart] = useState<Part | null>(null);
+    const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+    const handleSaveEdit = async () => {
+        if (!supabase || !editingPart || !editingPart.id) return;
+        setIsSavingEdit(true);
+        try {
+            const payload = {
+                title: editingPart.title || 'Untitled',
+                external_url: editingPart.external_url || '',
+                image_src: editingPart.image_src || '',
+                author: editingPart.author || undefined,
+                submitted_by: editingPart.submitted_by || 'Anonymous',
+                platform: editingPart.platform || [],
+                type_of_part: editingPart.type_of_part || [],
+                fabrication_method: editingPart.fabrication_method || [],
+                is_oem: editingPart.is_oem || false,
+                dropbox_url: editingPart.dropbox_url || undefined,
+            };
+            const { error: sbError } = await supabase.from('parts').update(payload).eq('id', editingPart.id);
+            if (sbError) throw sbError;
+            setParts(prev => prev.map(p => p.id === editingPart.id ? { ...p, ...payload } : p));
+            setEditingPart(null);
+        } catch (err: any) {
+            setError('Failed to save edits: ' + (err.message || String(err)));
+        } finally {
+            setIsSavingEdit(false);
+        }
+    };
+
+    const toggleArray = (field: keyof Part, value: string, current: string[], isSingle = false) => {
+        if (current.includes(value)) {
+            setEditingPart(prev => ({ ...prev!, [field]: isSingle ? [] : current.filter(v => v !== value) }));
+        } else {
+            setEditingPart(prev => ({ ...prev!, [field]: isSingle ? [value] : [...current, value] }));
+        }
+    };
 
     // Filtered lists
     const pendingParts = parts.filter(p => p.status === 'pending');
@@ -439,11 +521,11 @@ export default function AdminPage(props: PageProps) {
                             ) : (
                                 <Row>
                                     {pendingParts.map(part => (
-                                        <AdminPartCard key={part.id} part={part} actions={
-                                            <div className="d-flex gap-2">
+                                        <AdminPartCard key={part.id} part={part} onEdit={() => setEditingPart({ ...part })} actions={
+                                            <>
                                                 <Button variant="success" size="sm" className="w-50 fw-bold" onClick={() => handleApprove(part.id!)}>Approve</Button>
                                                 <Button variant="danger" size="sm" className="w-50 fw-bold" onClick={() => handleDeletePart(part.id!)}>Delete</Button>
-                                            </div>
+                                            </>
                                         } />
                                     ))}
                                 </Row>
@@ -473,7 +555,7 @@ export default function AdminPage(props: PageProps) {
                                         </div>
                                         <Row className="flex-nowrap overflow-auto pb-4" style={{ scrollbarWidth: 'thin' }}>
                                             {group.map(part => (
-                                                <AdminPartCard key={part.id} part={part} actions={
+                                                <AdminPartCard key={part.id} part={part} onEdit={() => setEditingPart({ ...part })} actions={
                                                     <Button variant="danger" size="sm" className="w-100 fw-bold" onClick={() => handleDeletePart(part.id!)}>Delete Duplicate</Button>
                                                 } />
                                             ))}
@@ -500,7 +582,7 @@ export default function AdminPage(props: PageProps) {
                             ) : (
                                 <Row>
                                     {approvedParts.map(part => (
-                                        <AdminPartCard key={part.id} part={part} actions={
+                                        <AdminPartCard key={part.id} part={part} onEdit={() => setEditingPart({ ...part })} actions={
                                             <Button variant="outline-danger" size="sm" className="w-100 fw-bold" onClick={() => handleDeletePart(part.id!, true)}>Revoke and Delete</Button>
                                         } />
                                     ))}
@@ -614,6 +696,189 @@ export default function AdminPage(props: PageProps) {
                     </Tab>
 
                 </Tabs>
+
+                {editingPart && (
+                    <Modal show={true} onHide={() => setEditingPart(null)} size="lg" data-bs-theme="dark" backdrop="static">
+                        <Modal.Header closeButton className="bg-dark border-secondary text-light">
+                            <Modal.Title className="fw-bold d-flex align-items-center gap-2">
+                                Edit Part <Badge bg="primary">#{editingPart.id?.toString().substring(0, 5)}</Badge>
+                            </Modal.Title>
+                        </Modal.Header>
+                        <Modal.Body className="bg-dark text-light border-0">
+                            <Form.Group className="mb-3">
+                                <Form.Label className="small uppercase fw-bold opacity-75 text-light">Part Title *</Form.Label>
+                                <Form.Control type="text" value={editingPart.title || ''} onChange={e => setEditingPart({ ...editingPart, title: e.target.value })} className="bg-black text-white border-secondary p-3 shadow-sm" />
+                            </Form.Group>
+                            <Form.Group className="mb-3">
+                                <Form.Label className="small uppercase fw-bold opacity-75 text-light">Project Link (cad_link) *</Form.Label>
+                                <Form.Control type="text" value={editingPart.external_url || ''} onChange={e => setEditingPart({ ...editingPart, external_url: e.target.value })} className="bg-black text-white border-secondary p-3 shadow-sm" />
+                            </Form.Group>
+                            <Form.Group className="mb-3">
+                                <Form.Label className="small uppercase fw-bold opacity-75 text-light">Mirror Link (Optional)</Form.Label>
+                                <Form.Control type="text" value={editingPart.dropbox_url || ''} onChange={e => setEditingPart({ ...editingPart, dropbox_url: e.target.value })} className="bg-black text-white border-secondary p-3 shadow-sm" placeholder="Dropbox, Google Drive, etc." />
+                            </Form.Group>
+                            <Form.Group className="mb-4">
+                                <Form.Label className="small uppercase fw-bold opacity-75 text-light">Image URL</Form.Label>
+                                <div className="d-flex gap-3 align-items-center">
+                                    <Form.Control type="text" value={Array.isArray(editingPart.image_src) ? editingPart.image_src[0] : (editingPart.image_src || '')} onChange={e => setEditingPart({ ...editingPart, image_src: e.target.value })} className="bg-black text-white border-secondary p-3 shadow-sm flex-grow-1" />
+                                    {editingPart.image_src && (
+                                        <div className="rounded overflow-hidden border border-secondary" style={{ width: "60px", height: "60px", flexShrink: 0, backgroundColor: "#1a1d20" }}>
+                                            <img src={Array.isArray(editingPart.image_src) ? editingPart.image_src[0] : editingPart.image_src} alt="Preview" style={{ objectFit: "cover", width: "100%", height: "100%" }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                        </div>
+                                    )}
+                                </div>
+                            </Form.Group>
+
+                            <Row className="mb-4 gx-3">
+                                <Col md={6}>
+                                    <Form.Group>
+                                        <Form.Label className="small uppercase fw-bold opacity-75 text-light">Model Author (Optional)</Form.Label>
+                                        <Form.Control type="text" value={editingPart.author || ''} onChange={e => setEditingPart({ ...editingPart, author: e.target.value })} className="bg-black text-white border-secondary p-3 shadow-sm" placeholder="e.g. John Doe" />
+                                    </Form.Group>
+                                </Col>
+                                <Col md={6}>
+                                    <Form.Group>
+                                        <Form.Label className="small uppercase fw-bold opacity-75 text-light">Submitted By (Optional)</Form.Label>
+                                        <Form.Control type="text" value={editingPart.submitted_by || ''} onChange={e => setEditingPart({ ...editingPart, submitted_by: e.target.value })} className="bg-black text-white border-secondary p-3 shadow-sm" placeholder="Anonymous" />
+                                    </Form.Group>
+                                </Col>
+                            </Row>
+
+                            {(() => {
+                                const pinnedStreet = boardPlatforms.find(p => p.name === "Street (DIY/Generic)");
+                                const pinnedOffroad = boardPlatforms.find(p => p.name === "Off-Road (DIY/Generic)");
+                                const pinnedMisc = boardPlatforms.find(p => p.name === "Misc" || p.name === "Miscellaneous");
+
+                                const others = boardPlatforms.filter(p => p.name !== "Street (DIY/Generic)" && p.name !== "Off-Road (DIY/Generic)" && p.name !== "Misc" && p.name !== "Miscellaneous");
+                                const group1 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'A' && first <= 'I'; });
+                                const group2 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'J' && first <= 'R'; });
+                                const group3 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'S' && first <= 'Z'; });
+
+                                return (
+                                    <Form.Group className="mb-4">
+                                        <Form.Label className="small uppercase fw-bold opacity-75 text-light mb-3">Manufacturer (Platform) *</Form.Label>
+                                        <div className="bg-black p-4 rounded border border-secondary shadow-inner">
+                                            <Row className="g-3 mb-4">
+                                                <Col xs={12} lg={4}>
+                                                    {pinnedStreet && (
+                                                        <Badge
+                                                            bg={editingPart.platform?.includes(pinnedStreet.name) ? "primary" : "none"}
+                                                            className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
+                                                            style={{ fontSize: "0.85rem" }}
+                                                            onClick={() => toggleArray('platform', pinnedStreet.name, editingPart.platform || [], true)}
+                                                        >
+                                                            {pinnedStreet.name}
+                                                        </Badge>
+                                                    )}
+                                                </Col>
+                                                <Col xs={12} lg={4}>
+                                                    {pinnedOffroad && (
+                                                        <Badge
+                                                            bg={editingPart.platform?.includes(pinnedOffroad.name) ? "primary" : "none"}
+                                                            className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
+                                                            style={{ fontSize: "0.85rem" }}
+                                                            onClick={() => toggleArray('platform', pinnedOffroad.name, editingPart.platform || [], true)}
+                                                        >
+                                                            {pinnedOffroad.name}
+                                                        </Badge>
+                                                    )}
+                                                </Col>
+                                                <Col xs={12} lg={4}>
+                                                    {pinnedMisc && (
+                                                        <Badge
+                                                            bg={editingPart.platform?.includes(pinnedMisc.name) ? "primary" : "none"}
+                                                            className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
+                                                            style={{ fontSize: "0.85rem" }}
+                                                            onClick={() => toggleArray('platform', pinnedMisc.name, editingPart.platform || [], true)}
+                                                        >
+                                                            {pinnedMisc.name}
+                                                        </Badge>
+                                                    )}
+                                                </Col>
+                                            </Row>
+
+                                            <h3 className="h6 fw-bold text-muted mb-3 uppercase letter-spacing-1 border-bottom border-secondary pb-2">Brands</h3>
+
+                                            <Row className="g-4">
+                                                <Col xs={12} lg={4} className="d-flex flex-column gap-2">
+                                                    <div className="text-center mb-1">
+                                                        <span className="small fw-bold text-muted uppercase letter-spacing-1">A - I</span>
+                                                    </div>
+                                                    <div className="d-flex flex-wrap gap-2">
+                                                        {group1.map(opt => (
+                                                            <Badge key={opt.id} role="button" bg={editingPart.platform?.includes(opt.name) ? "primary" : "none"} className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm" style={{ minWidth: "46%" }} onClick={() => toggleArray('platform', opt.name, editingPart.platform || [], true)}>
+                                                                {opt.name}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                </Col>
+                                                <Col xs={12} lg={4} className="d-flex flex-column gap-2">
+                                                    <div className="text-center mb-1">
+                                                        <span className="small fw-bold text-muted uppercase letter-spacing-1">J - R</span>
+                                                    </div>
+                                                    <div className="d-flex flex-wrap gap-2">
+                                                        {group2.map(opt => (
+                                                            <Badge key={opt.id} role="button" bg={editingPart.platform?.includes(opt.name) ? "primary" : "none"} className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm" style={{ minWidth: "46%" }} onClick={() => toggleArray('platform', opt.name, editingPart.platform || [], true)}>
+                                                                {opt.name}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                </Col>
+                                                <Col xs={12} lg={4} className="d-flex flex-column gap-2">
+                                                    <div className="text-center mb-1">
+                                                        <span className="small fw-bold text-muted uppercase letter-spacing-1">S - Z</span>
+                                                    </div>
+                                                    <div className="d-flex flex-wrap gap-2">
+                                                        {group3.map(opt => (
+                                                            <Badge key={opt.id} role="button" bg={editingPart.platform?.includes(opt.name) ? "primary" : "none"} className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm" style={{ minWidth: "46%" }} onClick={() => toggleArray('platform', opt.name, editingPart.platform || [], true)}>
+                                                                {opt.name}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                </Col>
+                                            </Row>
+                                        </div>
+                                    </Form.Group>
+                                );
+                            })()}
+
+                            <Form.Group className="mb-4">
+                                <Form.Label className="small uppercase fw-bold opacity-75 text-light">Category *</Form.Label>
+                                <div className="d-flex flex-wrap gap-2 p-4 bg-black rounded border border-secondary shadow-inner">
+                                    {partCategories.map(c => (
+                                        <Badge key={c.id} role="button" bg={editingPart.type_of_part?.includes(c.name) ? "primary" : "none"} className="border border-light p-2 cursor-pointer shadow-sm text-wrap lh-sm" onClick={() => toggleArray('type_of_part', c.name, editingPart.type_of_part || [], true)}>
+                                            {c.name}
+                                        </Badge>
+                                    ))}
+                                </div>
+                            </Form.Group>
+
+                            <Row className="mb-4">
+                                <Col md={8}>
+                                    <Form.Group>
+                                        <Form.Label className="small uppercase fw-bold opacity-75 text-light d-block">Fab Method *</Form.Label>
+                                        <div className="d-flex flex-wrap gap-2 p-3 bg-black rounded border border-secondary shadow-inner">
+                                            {["3d Printed", "CNC", "Molded", "Other"].map(f => (
+                                                <Button key={f} size="sm" variant={editingPart.fabrication_method?.includes(f) ? "primary" : "outline-light"} onClick={() => toggleArray('fabrication_method', f, editingPart.fabrication_method || [])}>
+                                                    {f}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </Form.Group>
+                                </Col>
+                                <Col md={4} className="d-flex align-items-center">
+                                    <Form.Check type="checkbox" id="edit-oem" label="OEM PART" checked={editingPart.is_oem || false} onChange={e => setEditingPart({ ...editingPart, is_oem: e.target.checked })} className="fw-bold text-primary mt-3" />
+                                </Col>
+                            </Row>
+                        </Modal.Body>
+                        <Modal.Footer className="bg-dark border-secondary p-4">
+                            <Button variant="secondary" onClick={() => setEditingPart(null)} className="px-4">Cancel</Button>
+                            <Button variant="success" className="px-5 fw-bold shadow-lg" onClick={handleSaveEdit} disabled={isSavingEdit}>
+                                {isSavingEdit ? <><Spinner size="sm" animation="border" className="me-2" /> Saving...</> : "Publish Changes"}
+                            </Button>
+                        </Modal.Footer>
+                    </Modal>
+                )}
             </Container>
             <SiteFooter />
         </div>
