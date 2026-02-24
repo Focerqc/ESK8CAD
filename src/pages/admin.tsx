@@ -780,12 +780,12 @@ export default function AdminPage(props: PageProps) {
                                                 </Col>
                                             </Row>
 
-                                            <h3 className="h6 fw-bold text-muted mb-3 uppercase letter-spacing-1 border-bottom border-secondary pb-2 text-center">Brands</h3>
+                                            <h3 className="h6 fw-bold text-light mb-3 uppercase letter-spacing-1 border-bottom border-secondary pb-2 text-center">Brands</h3>
 
                                             <Row className="g-4">
                                                 <Col xs={12} lg={4} className="d-flex flex-column gap-2">
                                                     <div className="text-center mb-1">
-                                                        <span className="small fw-bold text-muted uppercase letter-spacing-1">A - I</span>
+                                                        <span className="small fw-bold text-light uppercase letter-spacing-1">A - I</span>
                                                     </div>
                                                     <div className="d-flex flex-wrap gap-2">
                                                         {group1.map(opt => (
@@ -797,7 +797,7 @@ export default function AdminPage(props: PageProps) {
                                                 </Col>
                                                 <Col xs={12} lg={4} className="d-flex flex-column gap-2">
                                                     <div className="text-center mb-1">
-                                                        <span className="small fw-bold text-muted uppercase letter-spacing-1">J - R</span>
+                                                        <span className="small fw-bold text-light uppercase letter-spacing-1">J - R</span>
                                                     </div>
                                                     <div className="d-flex flex-wrap gap-2">
                                                         {group2.map(opt => (
@@ -809,7 +809,7 @@ export default function AdminPage(props: PageProps) {
                                                 </Col>
                                                 <Col xs={12} lg={4} className="d-flex flex-column gap-2">
                                                     <div className="text-center mb-1">
-                                                        <span className="small fw-bold text-muted uppercase letter-spacing-1">S - Z</span>
+                                                        <span className="small fw-bold text-light uppercase letter-spacing-1">S - Z</span>
                                                     </div>
                                                     <div className="d-flex flex-wrap gap-2">
                                                         {group3.map(opt => (
