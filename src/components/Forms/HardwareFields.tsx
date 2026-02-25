@@ -51,6 +51,20 @@ export default function HardwareFields({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
 
+    // Combine fetched years and current releaseYear (if custom)
+    const displayYears = useMemo(() => {
+        const allYears = new Set(years);
+        if (releaseYear) allYears.add(releaseYear);
+        return Array.from(allYears).sort((a, b) => b - a); // descending
+    }, [years, releaseYear]);
+
+    // Combine fetched models and current boardModel (if custom)
+    const displayModels = useMemo(() => {
+        const allModels = new Set(models);
+        if (boardModel) allModels.add(boardModel);
+        return Array.from(allModels).sort((a, b) => a.localeCompare(b));
+    }, [models, boardModel]);
+
     if (!activePlatform) return null; // wait until platform selected
 
     const handleModelSelect = (m: string) => {
@@ -86,19 +100,6 @@ export default function HardwareFields({
         setIsAddingNewModel(false);
     };
 
-    // Combine fetched years and current releaseYear (if custom)
-    const displayYears = useMemo(() => {
-        const allYears = new Set(years);
-        if (releaseYear) allYears.add(releaseYear);
-        return Array.from(allYears).sort((a, b) => b - a); // descending
-    }, [years, releaseYear]);
-
-    // Combine fetched models and current boardModel (if custom)
-    const displayModels = useMemo(() => {
-        const allModels = new Set(models);
-        if (boardModel) allModels.add(boardModel);
-        return Array.from(allModels).sort((a, b) => a.localeCompare(b));
-    }, [models, boardModel]);
 
     return (
         <div className="mt-4 p-4 bg-dark border border-secondary rounded shadow-sm">
