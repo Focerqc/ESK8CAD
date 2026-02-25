@@ -47,6 +47,7 @@ const AdminPartCard = ({ part, actions, onEdit }: { part: Part, actions: React.R
                                 {part.needs_model_review && <span className="me-2" title="Needs Model Review">🚩</span>}
                                 {part.title}
                             </Card.Title>
+                            <Button variant="outline-light" size="sm" className="px-2 py-0 flex-shrink-0" onClick={onEdit} style={{ fontSize: '0.8rem' }}>Edit</Button>
                         </div>
                         <Card.Subtitle className="mb-3 text-muted small">
                             By: <span className="text-light">{author}</span>
@@ -80,7 +81,6 @@ const AdminPartCard = ({ part, actions, onEdit }: { part: Part, actions: React.R
                                     Mirror
                                 </a>
                             )}
-                            <Button variant="outline-primary" size="sm" className="w-100 fw-bold mb-2 py-2" onClick={onEdit}>Edit Part</Button>
                             <Stack direction="horizontal" gap={2} className="w-100 justify-content-between">
                                 {actions}
                             </Stack>
@@ -104,9 +104,6 @@ export default function AdminPage(props: PageProps) {
 
     const [parts, setParts] = useState<Part[]>([]);
     const [hiddenParts, setHiddenParts] = useState<Part[]>([]);
-    const [deletedParts, setDeletedParts] = useState<Part[]>([]);
-    const [isDeletedLoading, setIsDeletedLoading] = useState(false);
-    const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
     const [partCategories, setPartCategories] = useState<Taxonomy[]>([]);
     const [boardPlatforms, setBoardPlatforms] = useState<Taxonomy[]>([]);
     const [newCategory, setNewCategory] = useState("");
@@ -292,7 +289,7 @@ export default function AdminPage(props: PageProps) {
         setIsLoading(true);
         setError(null);
         try {
-            const { data: pData, error: pError } = await supabase.from('parts').select('*').eq('is_hidden', false).is('deleted_at', null).order('created_at', { ascending: false });
+            const { data: pData, error: pError } = await supabase.from('parts').select('*').eq('is_hidden', false).order('created_at', { ascending: false });
             if (pError) throw pError;
             setParts((pData as Part[]) || []);
 
@@ -312,7 +309,7 @@ export default function AdminPage(props: PageProps) {
         if (!supabase) return;
         setIsHiddenLoading(true);
         try {
-            const { data: hData, error: hError } = await supabase.from('parts').select('*').eq('is_hidden', true).is('deleted_at', null).order('created_at', { ascending: false });
+            const { data: hData, error: hError } = await supabase.from('parts').select('*').eq('is_hidden', true).order('created_at', { ascending: false });
             if (hError) throw hError;
             setHiddenParts((hData as Part[]) || []);
         } catch (err: any) {
@@ -322,25 +319,10 @@ export default function AdminPage(props: PageProps) {
         }
     };
 
-    const fetchDeletedData = async () => {
-        if (!supabase) return;
-        setIsDeletedLoading(true);
-        try {
-            const { data: dData, error: dError } = await supabase.from('parts').select('*').not('deleted_at', 'is', null).order('deleted_at', { ascending: false });
-            if (dError) throw dError;
-            setDeletedParts((dData as Part[]) || []);
-        } catch (err: any) {
-            setError(err.message || 'Error fetching deleted data.');
-        } finally {
-            setIsDeletedLoading(false);
-        }
-    };
-
     useEffect(() => {
         if (user) {
             fetchData();
             fetchHiddenData();
-            fetchDeletedData();
         }
     }, [user]);
 
@@ -389,91 +371,49 @@ export default function AdminPage(props: PageProps) {
         }
     };
 
-    const handleHidePart = async (id: string) => {
+    const handleDeletePart = async (id: string, isRevoke = false) => {
         if (!supabase) return;
-        if (!window.confirm("Hide Part? Are you sure you want to soft-hide this part from the public side?")) return;
-        setActionLoadingId(id);
-        try {
-            const { error: sbError } = await supabase.from('parts').update({ is_hidden: true }).eq('id', id);
-            if (sbError) throw sbError;
 
-            const hiddenTarget = parts.find(p => p.id === id);
-            setParts(prev => prev.filter(p => p.id !== id));
-            if (hiddenTarget) {
-                setHiddenParts(prev => [{ ...hiddenTarget, is_hidden: true }, ...prev]);
-            }
-        } catch (err: any) {
-            setError('Failed to hide part: ' + (err.message || String(err)));
-        } finally {
-            setActionLoadingId(null);
-        }
-    };
-
-    const handleSoftDeletePart = async (id: string) => {
-        if (!supabase) return;
-        if (!window.confirm('Move to Trash? Are you sure you want to delete this part?')) return;
-        setActionLoadingId(id);
-        try {
-            const now = new Date().toISOString();
-            const { error: sbError } = await supabase.from('parts').update({ deleted_at: now }).eq('id', id);
-            if (sbError) throw sbError;
-
-            let target = parts.find(p => p.id === id) || hiddenParts.find(p => p.id === id);
-            setParts(prev => prev.filter(p => p.id !== id));
-            setHiddenParts(prev => prev.filter(p => p.id !== id));
-            if (target) {
-                setDeletedParts(prev => [{ ...target!, deleted_at: now }, ...prev]);
-            }
-        } catch (err: any) {
-            setError('Failed to delete: ' + (err.message || String(err)));
-        } finally {
-            setActionLoadingId(null);
-        }
-    };
-
-    const handlePermDeletePart = async (id: string) => {
-        if (!supabase) return;
-        if (!window.confirm('Permanent Delete! You cannot undo this. Continue?')) return;
-        setActionLoadingId(id);
-        try {
-            const { error: sbError } = await supabase.from('parts').delete().eq('id', id);
-            if (sbError) throw sbError;
-            setDeletedParts(prev => prev.filter(p => p.id !== id));
-            setParts(prev => prev.filter(p => p.id !== id));
-        } catch (err: any) {
-            setError('Failed to permanently delete: ' + (err.message || String(err)));
-        } finally {
-            setActionLoadingId(null);
-        }
-    };
-
-    const handleRestorePart = async (id: string, fromState: 'hidden' | 'deleted') => {
-        if (!supabase) return;
-        if (!window.confirm("Restore Part? Are you sure you want to restore this part?")) return;
-        setActionLoadingId(id);
-        try {
-            if (fromState === 'hidden') {
-                const { error: sbError } = await supabase.from('parts').update({ is_hidden: false }).eq('id', id);
+        if (isRevoke) {
+            if (!window.confirm("Hide Part? Are you sure you want to soft-hide this part from the public side?")) return;
+            try {
+                const { error: sbError } = await supabase.from('parts').update({ is_hidden: true }).eq('id', id);
                 if (sbError) throw sbError;
 
-                const restoredPart = hiddenParts.find(p => p.id === id);
-                setHiddenParts(prev => prev.filter(p => p.id !== id));
-                if (restoredPart) setParts(prev => [{ ...restoredPart, is_hidden: false }, ...prev]);
-            } else {
-                const { error: sbError } = await supabase.from('parts').update({ deleted_at: null }).eq('id', id);
-                if (sbError) throw sbError;
-
-                const restoredPart = deletedParts.find(p => p.id === id);
-                setDeletedParts(prev => prev.filter(p => p.id !== id));
-                if (restoredPart) {
-                    if (restoredPart.is_hidden) setHiddenParts(prev => [{ ...restoredPart, deleted_at: null }, ...prev]);
-                    else setParts(prev => [{ ...restoredPart, deleted_at: null }, ...prev]);
+                const hiddenTarget = parts.find(p => p.id === id);
+                setParts(prev => prev.filter(p => p.id !== id));
+                if (hiddenTarget) {
+                    setHiddenParts(prev => [{ ...hiddenTarget, is_hidden: true }, ...prev]);
                 }
+            } catch (err: any) {
+                setError('Failed to hide part: ' + (err.message || String(err)));
+            }
+        } else {
+            if (!window.confirm('Are you sure you want to delete this part?')) return;
+            try {
+                const { error: sbError } = await supabase.from('parts').delete().eq('id', id);
+                if (sbError) throw sbError;
+                setParts(prev => prev.filter(p => p.id !== id));
+            } catch (err: any) {
+                setError('Failed to delete: ' + (err.message || String(err)));
+            }
+        }
+    };
+
+    const handleRestorePart = async (id: string) => {
+        if (!supabase) return;
+        if (!window.confirm("Restore Part? Are you sure you want to unhide this part?")) return;
+        try {
+            const { error: sbError } = await supabase.from('parts').update({ is_hidden: false }).eq('id', id);
+            if (sbError) throw sbError;
+
+            const restoredPart = hiddenParts.find(p => p.id === id);
+            setHiddenParts(prev => prev.filter(p => p.id !== id));
+            if (restoredPart) {
+                setParts(prev => [{ ...restoredPart, is_hidden: false }, ...prev]);
             }
         } catch (err: any) {
             setError('Failed to restore part: ' + (err.message || String(err)));
-        } finally {
-            setActionLoadingId(null);
         }
     };
 
@@ -611,7 +551,6 @@ export default function AdminPage(props: PageProps) {
                 release_year: null,
                 board_model: newModelName.trim(),
                 needs_model_review: false,
-                is_hidden: true,
                 status: 'approved'
             };
             const { error: sbError } = await supabase.from('parts').insert([payload]);
@@ -741,12 +680,8 @@ export default function AdminPage(props: PageProps) {
                                     {pendingParts.map(part => (
                                         <AdminPartCard key={part.id} part={part} onEdit={() => setEditingPart({ ...part })} actions={
                                             <>
-                                                <Button variant="success" size="sm" className="w-50 fw-bold" onClick={() => handleApprove(part.id!)} disabled={actionLoadingId === part.id}>
-                                                    {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Approve'}
-                                                </Button>
-                                                <Button variant="danger" size="sm" className="w-50 fw-bold" onClick={() => handlePermDeletePart(part.id!)} disabled={actionLoadingId === part.id}>
-                                                    {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Reject/Del'}
-                                                </Button>
+                                                <Button variant="success" size="sm" className="w-50 fw-bold" onClick={() => handleApprove(part.id!)}>Approve</Button>
+                                                <Button variant="danger" size="sm" className="w-50 fw-bold" onClick={() => handleDeletePart(part.id!)}>Delete</Button>
                                             </>
                                         } />
                                     ))}
@@ -778,9 +713,7 @@ export default function AdminPage(props: PageProps) {
                                         <Row className="flex-nowrap overflow-auto pb-4" style={{ scrollbarWidth: 'thin' }}>
                                             {group.map(part => (
                                                 <AdminPartCard key={part.id} part={part} onEdit={() => setEditingPart({ ...part })} actions={
-                                                    <Button variant="danger" size="sm" className="w-100 fw-bold" onClick={() => handlePermDeletePart(part.id!)} disabled={actionLoadingId === part.id}>
-                                                        {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Delete Duplicate'}
-                                                    </Button>
+                                                    <Button variant="danger" size="sm" className="w-100 fw-bold" onClick={() => handleDeletePart(part.id!)}>Delete Duplicate</Button>
                                                 } />
                                             ))}
                                         </Row>
@@ -807,14 +740,7 @@ export default function AdminPage(props: PageProps) {
                                 <Row>
                                     {approvedParts.map(part => (
                                         <AdminPartCard key={part.id} part={part} onEdit={() => setEditingPart({ ...part })} actions={
-                                            <>
-                                                <Button variant="outline-warning" size="sm" className="w-50 fw-bold" onClick={() => handleHidePart(part.id!)} disabled={actionLoadingId === part.id}>
-                                                    {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Hide'}
-                                                </Button>
-                                                <Button variant="outline-danger" size="sm" className="w-50 fw-bold" onClick={() => handleSoftDeletePart(part.id!)} disabled={actionLoadingId === part.id}>
-                                                    {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Delete'}
-                                                </Button>
-                                            </>
+                                            <Button variant="outline-warning" size="sm" className="w-100 fw-bold" onClick={() => handleDeletePart(part.id!, true)}>Hide Part</Button>
                                         } />
                                     ))}
                                 </Row>
@@ -1324,61 +1250,7 @@ export default function AdminPage(props: PageProps) {
                                 <Row>
                                     {hiddenParts.map(part => (
                                         <AdminPartCard key={part.id} part={part} onEdit={() => setEditingPart({ ...part })} actions={
-                                            <>
-                                                <Button variant="outline-success" size="sm" className="w-50 fw-bold" onClick={() => handleRestorePart(part.id!, 'hidden')} disabled={actionLoadingId === part.id}>
-                                                    {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Restore'}
-                                                </Button>
-                                                <Button variant="outline-danger" size="sm" className="w-50 fw-bold" onClick={() => handleSoftDeletePart(part.id!)} disabled={actionLoadingId === part.id}>
-                                                    {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Delete'}
-                                                </Button>
-                                            </>
-                                        } />
-                                    ))}
-                                </Row>
-                            )}
-                        </div>
-                    </Tab>
-
-                    {/* 8. Recently Deleted */}
-                    <Tab eventKey="deleted" title={`8. Recently Deleted (${deletedParts.length})`}>
-                        <div className="mt-4 p-4 p-md-5 bg-dark border border-secondary rounded shadow-sm">
-                            <div className="d-flex justify-content-between align-items-center mb-3">
-                                <h5 className="text-danger fw-bold mb-0">Trash Bin</h5>
-                            </div>
-                            <p className="text-muted small mb-4">These parts are soft-deleted and will be permanently removed eventually.</p>
-
-                            {isDeletedLoading ? (
-                                <Row>
-                                    {[1, 2, 3, 4].map(i => (
-                                        <Col key={`skel-del-${i}`} xs={12} sm={6} md={6} lg={4} xl={3} className="mb-4">
-                                            <Card className="h-100 shadow-sm border-secondary bg-black" style={{ minHeight: '300px' }}>
-                                                <div className="card-img-holder placeholder-glow bg-secondary" style={{ aspectRatio: "16 / 9", opacity: 0.1 }}>
-                                                    <div className="placeholder w-100 h-100"></div>
-                                                </div>
-                                                <Card.Body className="d-flex flex-column gap-2 p-3">
-                                                    <div className="placeholder-glow"><span className="placeholder col-8 bg-secondary"></span></div>
-                                                    <div className="placeholder-glow"><span className="placeholder col-4 bg-secondary"></span></div>
-                                                </Card.Body>
-                                            </Card>
-                                        </Col>
-                                    ))}
-                                </Row>
-                            ) : deletedParts.length === 0 ? (
-                                <div className="p-5 text-center text-muted bg-secondary rounded border border-secondary shadow-sm" style={{ minHeight: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    No deleted parts found.
-                                </div>
-                            ) : (
-                                <Row>
-                                    {deletedParts.map(part => (
-                                        <AdminPartCard key={part.id} part={part} onEdit={() => setEditingPart({ ...part })} actions={
-                                            <>
-                                                <Button variant="outline-success" size="sm" className="w-50 fw-bold" onClick={() => handleRestorePart(part.id!, 'deleted')} disabled={actionLoadingId === part.id}>
-                                                    {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Restore'}
-                                                </Button>
-                                                <Button variant="danger" size="sm" className="w-50 fw-bold" onClick={() => handlePermDeletePart(part.id!)} disabled={actionLoadingId === part.id}>
-                                                    {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Perm Delete'}
-                                                </Button>
-                                            </>
+                                            <Button variant="outline-success" size="sm" className="w-100 fw-bold" onClick={() => handleRestorePart(part.id!)}>Restore</Button>
                                         } />
                                     ))}
                                 </Row>
@@ -1618,3 +1490,4 @@ export default function AdminPage(props: PageProps) {
         </div>
     );
 }
+
