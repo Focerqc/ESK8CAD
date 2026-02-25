@@ -17,6 +17,7 @@ export interface Part {
     release_year?: number | null;
     board_model?: string | null;
     needs_model_review?: boolean;
+    is_hidden?: boolean;
     created_at?: string;
 }
 

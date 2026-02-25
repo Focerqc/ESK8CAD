@@ -44,7 +44,7 @@ export const useParts = (platform?: string, category?: string) => {
       }
 
       try {
-        let query = client.from('parts').select('*').eq('status', 'approved').order('created_at', { ascending: false });
+        let query = client.from('parts').select('*').eq('status', 'approved').eq('is_hidden', false).order('created_at', { ascending: false });
 
         if (platform) {
           query = query.contains('platform', [platform]);

@@ -103,6 +103,7 @@ export default function AdminPage(props: PageProps) {
     const [isAuthChecking, setIsAuthChecking] = useState(true);
 
     const [parts, setParts] = useState<Part[]>([]);
+    const [hiddenParts, setHiddenParts] = useState<Part[]>([]);
     const [partCategories, setPartCategories] = useState<Taxonomy[]>([]);
     const [boardPlatforms, setBoardPlatforms] = useState<Taxonomy[]>([]);
     const [newCategory, setNewCategory] = useState("");
@@ -124,6 +125,7 @@ export default function AdminPage(props: PageProps) {
     const [newModelName, setNewModelName] = useState<string>("");
 
     const [isLoading, setIsLoading] = useState(false);
+    const [isHiddenLoading, setIsHiddenLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const [editingPart, setEditingPart] = useState<Part | null>(null);
@@ -287,7 +289,7 @@ export default function AdminPage(props: PageProps) {
         setIsLoading(true);
         setError(null);
         try {
-            const { data: pData, error: pError } = await supabase.from('parts').select('*').order('created_at', { ascending: false });
+            const { data: pData, error: pError } = await supabase.from('parts').select('*').eq('is_hidden', false).order('created_at', { ascending: false });
             if (pError) throw pError;
             setParts((pData as Part[]) || []);
 
@@ -303,9 +305,24 @@ export default function AdminPage(props: PageProps) {
         }
     };
 
+    const fetchHiddenData = async () => {
+        if (!supabase) return;
+        setIsHiddenLoading(true);
+        try {
+            const { data: hData, error: hError } = await supabase.from('parts').select('*').eq('is_hidden', true).order('created_at', { ascending: false });
+            if (hError) throw hError;
+            setHiddenParts((hData as Part[]) || []);
+        } catch (err: any) {
+            setError(err.message || 'Error fetching hidden data.');
+        } finally {
+            setIsHiddenLoading(false);
+        }
+    };
+
     useEffect(() => {
         if (user) {
             fetchData();
+            fetchHiddenData();
         }
     }, [user]);
 
@@ -356,14 +373,47 @@ export default function AdminPage(props: PageProps) {
 
     const handleDeletePart = async (id: string, isRevoke = false) => {
         if (!supabase) return;
-        if (!window.confirm(`Are you sure you want to ${isRevoke ? 'revoke and delete' : 'delete'} this part?`)) return;
 
+        if (isRevoke) {
+            if (!window.confirm("Hide Part? Are you sure you want to soft-hide this part from the public side?")) return;
+            try {
+                const { error: sbError } = await supabase.from('parts').update({ is_hidden: true }).eq('id', id);
+                if (sbError) throw sbError;
+
+                const hiddenTarget = parts.find(p => p.id === id);
+                setParts(prev => prev.filter(p => p.id !== id));
+                if (hiddenTarget) {
+                    setHiddenParts(prev => [{ ...hiddenTarget, is_hidden: true }, ...prev]);
+                }
+            } catch (err: any) {
+                setError('Failed to hide part: ' + (err.message || String(err)));
+            }
+        } else {
+            if (!window.confirm('Are you sure you want to delete this part?')) return;
+            try {
+                const { error: sbError } = await supabase.from('parts').delete().eq('id', id);
+                if (sbError) throw sbError;
+                setParts(prev => prev.filter(p => p.id !== id));
+            } catch (err: any) {
+                setError('Failed to delete: ' + (err.message || String(err)));
+            }
+        }
+    };
+
+    const handleRestorePart = async (id: string) => {
+        if (!supabase) return;
+        if (!window.confirm("Restore Part? Are you sure you want to unhide this part?")) return;
         try {
-            const { error: sbError } = await supabase.from('parts').delete().eq('id', id);
+            const { error: sbError } = await supabase.from('parts').update({ is_hidden: false }).eq('id', id);
             if (sbError) throw sbError;
-            setParts(prev => prev.filter(p => p.id !== id));
+
+            const restoredPart = hiddenParts.find(p => p.id === id);
+            setHiddenParts(prev => prev.filter(p => p.id !== id));
+            if (restoredPart) {
+                setParts(prev => [{ ...restoredPart, is_hidden: false }, ...prev]);
+            }
         } catch (err: any) {
-            setError('Failed to delete: ' + (err.message || String(err)));
+            setError('Failed to restore part: ' + (err.message || String(err)));
         }
     };
 
@@ -690,7 +740,7 @@ export default function AdminPage(props: PageProps) {
                                 <Row>
                                     {approvedParts.map(part => (
                                         <AdminPartCard key={part.id} part={part} onEdit={() => setEditingPart({ ...part })} actions={
-                                            <Button variant="outline-danger" size="sm" className="w-100 fw-bold" onClick={() => handleDeletePart(part.id!, true)}>Revoke and Delete</Button>
+                                            <Button variant="outline-warning" size="sm" className="w-100 fw-bold" onClick={() => handleDeletePart(part.id!, true)}>Hide Part</Button>
                                         } />
                                     ))}
                                 </Row>
@@ -1161,6 +1211,49 @@ export default function AdminPage(props: PageProps) {
                                         </div>
                                     </div>
                                 </div>
+                            )}
+                        </div>
+                    </Tab>
+
+                    {/* 7. Hidden */}
+                    <Tab eventKey="hidden" title={`7. Hidden (${hiddenParts.length})`}>
+                        <div className="mt-4 p-4 p-md-5 bg-dark border border-secondary rounded shadow-sm">
+                            <div className="d-flex justify-content-between align-items-center mb-3">
+                                <h5 className="text-info fw-bold mb-0">Hidden Vault</h5>
+                            </div>
+                            <p className="text-muted small mb-4">These parts are soft-hidden via the <code className="text-white">is_hidden</code> flag and do not appear on the public site.</p>
+
+                            {isHiddenLoading ? (
+                                <Row>
+                                    {[1, 2, 3, 4].map(i => (
+                                        <Col key={`skel-${i}`} xs={12} sm={6} md={6} lg={4} xl={3} className="mb-4">
+                                            <Card className="h-100 shadow-sm border-secondary bg-black" style={{ minHeight: '300px' }}>
+                                                <div className="card-img-holder placeholder-glow bg-secondary" style={{ aspectRatio: "16 / 9", opacity: 0.1 }}>
+                                                    <div className="placeholder w-100 h-100"></div>
+                                                </div>
+                                                <Card.Body className="d-flex flex-column gap-2 p-3">
+                                                    <div className="placeholder-glow"><span className="placeholder col-8 bg-secondary"></span></div>
+                                                    <div className="placeholder-glow"><span className="placeholder col-4 bg-secondary"></span></div>
+                                                    <div className="mt-auto pt-3 placeholder-glow d-flex gap-2">
+                                                        <span className="placeholder col-12 bg-secondary py-3 rounded"></span>
+                                                    </div>
+                                                </Card.Body>
+                                            </Card>
+                                        </Col>
+                                    ))}
+                                </Row>
+                            ) : hiddenParts.length === 0 ? (
+                                <div className="p-5 text-center text-muted bg-secondary rounded border border-secondary shadow-sm" style={{ minHeight: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    No hidden parts found.
+                                </div>
+                            ) : (
+                                <Row>
+                                    {hiddenParts.map(part => (
+                                        <AdminPartCard key={part.id} part={part} onEdit={() => setEditingPart({ ...part })} actions={
+                                            <Button variant="outline-success" size="sm" className="w-100 fw-bold" onClick={() => handleRestorePart(part.id!)}>Restore</Button>
+                                        } />
+                                    ))}
+                                </Row>
                             )}
                         </div>
                     </Tab>
